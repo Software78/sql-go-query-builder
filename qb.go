@@ -27,9 +27,19 @@ type QB struct {
 }
 
 // New creates a QB bound to the given dialect.
-// Use dialect.Postgres{} or dialect.MySQL{}.
+// Prefer NewMySQL or NewPostgres when using this module as a dependency.
 func New(d dialect.Dialect) *QB {
 	return &QB{d: d}
+}
+
+// NewMySQL creates a QB for MySQL (? placeholders, backtick identifiers).
+func NewMySQL() *QB {
+	return New(dialect.MySQL{})
+}
+
+// NewPostgres creates a QB for PostgreSQL ($N placeholders, double-quoted identifiers).
+func NewPostgres() *QB {
+	return New(dialect.Postgres{})
 }
 
 // Select starts a SELECT builder with the given columns.

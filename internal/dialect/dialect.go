@@ -35,17 +35,7 @@ func (Postgres) QuoteIdentifier(s string) string {
 
 // LimitClause returns LIMIT N OFFSET M. Pass -1 to omit either term.
 func (Postgres) LimitClause(limit, offset int64) string {
-	var b strings.Builder
-	if limit >= 0 {
-		fmt.Fprintf(&b, "LIMIT %d", limit)
-	}
-	if offset > 0 {
-		if b.Len() > 0 {
-			b.WriteByte(' ')
-		}
-		fmt.Fprintf(&b, "OFFSET %d", offset)
-	}
-	return b.String()
+	return DefaultLimitClause(limit, offset)
 }
 
 // Name returns "postgres".
@@ -64,6 +54,12 @@ func (MySQL) QuoteIdentifier(s string) string {
 
 // LimitClause returns LIMIT N OFFSET M. Pass -1 to omit either term.
 func (MySQL) LimitClause(limit, offset int64) string {
+	return DefaultLimitClause(limit, offset)
+}
+
+// DefaultLimitClause is the shared LIMIT/OFFSET implementation for dialects
+// that use standard SQL syntax. Pass -1 to omit either term.
+func DefaultLimitClause(limit, offset int64) string {
 	var b strings.Builder
 	if limit >= 0 {
 		fmt.Fprintf(&b, "LIMIT %d", limit)

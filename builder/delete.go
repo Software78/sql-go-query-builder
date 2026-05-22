@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/Software78/sql-go-query-builder/internal/clause"
@@ -15,6 +16,7 @@ type DeleteBuilder struct {
 	using     string
 	where     *clause.WhereClause
 	returning []string
+	err       error
 }
 
 func newDelete(d dialect.Dialect) *DeleteBuilder {
@@ -38,6 +40,10 @@ func (b *DeleteBuilder) Using(table string) *DeleteBuilder {
 
 // Where adds a predicate joined with AND.
 func (b *DeleteBuilder) Where(col, op string, val any) *DeleteBuilder {
+	if !clause.ValidOp(op) {
+		b.err = fmt.Errorf("%w: %q", ErrInvalidOp, op)
+		return b
+	}
 	b.where.And(&clause.SimplePredicate{Col: col, Op: op, Val: val})
 	return b
 }
@@ -50,7 +56,34 @@ func (b *DeleteBuilder) WhereRaw(sql string, args ...any) *DeleteBuilder {
 
 // WhereIn adds a col IN (...) predicate.
 func (b *DeleteBuilder) WhereIn(col string, vals ...any) *DeleteBuilder {
+	if len(vals) == 0 {
+		b.err = ErrEmptyIN
+		return b
+	}
 	b.where.And(&clause.InPredicate{Col: col, Vals: vals})
+	return b
+}
+
+// OrWhere adds a col OP val predicate joined with OR.
+func (b *DeleteBuilder) OrWhere(col, op string, val any) *DeleteBuilder {
+	if !clause.ValidOp(op) {
+		b.err = fmt.Errorf("%w: %q", ErrInvalidOp, op)
+		return b
+	}
+	b.where.Or(&clause.SimplePredicate{Col: col, Op: op, Val: val})
+	return b
+}
+
+// WhereGroup adds a grouped (parenthesised) set of predicates joined with AND.
+// The callback receives a fresh DeleteBuilder; any Where* calls on it are
+// collected and wrapped in parentheses as a single nested predicate.
+func (b *DeleteBuilder) WhereGroup(fn func(b *DeleteBuilder)) *DeleteBuilder {
+	inner := newDelete(b.d)
+	fn(inner)
+	if inner.where.IsEmpty() {
+		return b
+	}
+	b.where.And(&clause.GroupedPredicate{Inner: inner.where})
 	return b
 }
 
@@ -62,6 +95,9 @@ func (b *DeleteBuilder) Returning(cols ...string) *DeleteBuilder {
 
 // ToSQL renders the DELETE statement.
 func (b *DeleteBuilder) ToSQL() (string, []any, error) {
+	if b.err != nil {
+		return "", nil, b.err
+	}
 	if b.table == "" {
 		return "", nil, ErrNoTable
 	}

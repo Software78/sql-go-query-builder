@@ -18,11 +18,10 @@ const (
 
 // ConflictClause is returned by OnConflict to allow fluent action chaining.
 type ConflictClause struct {
-	b         *InsertBuilder
-	col       string
-	action    ConflictAction
-	updateCol string
-	updateVal any
+	b      *InsertBuilder
+	col    string
+	action ConflictAction
+	sets   []setItem
 }
 
 // DoNothing sets ON CONFLICT DO NOTHING.
@@ -31,13 +30,17 @@ func (c *ConflictClause) DoNothing() *InsertBuilder {
 	return c.b
 }
 
-// DoUpdate sets ON CONFLICT (col) DO UPDATE SET updateCol = val.
-func (c *ConflictClause) DoUpdate(col string, val any) *InsertBuilder {
+// DoUpdate sets ON CONFLICT (col) DO UPDATE SET col = val.
+// Call multiple times for multiple columns; chain on the returned ConflictClause,
+// then call Back() to return the InsertBuilder.
+func (c *ConflictClause) DoUpdate(col string, val any) *ConflictClause {
 	c.action = ConflictDoUpdate
-	c.updateCol = col
-	c.updateVal = val
-	return c.b
+	c.sets = append(c.sets, setItem{col: col, val: val})
+	return c
 }
+
+// Back returns the InsertBuilder once conflict configuration is done.
+func (c *ConflictClause) Back() *InsertBuilder { return c.b }
 
 // InsertBuilder constructs an INSERT statement.
 // It is NOT goroutine-safe.
@@ -172,14 +175,16 @@ func (b *InsertBuilder) ToSQL() (string, []any, error) {
 				sb.WriteString("\nON CONFLICT DO NOTHING")
 			}
 		case ConflictDoUpdate:
-			idx++
 			sb.WriteString("\nON CONFLICT (")
 			sb.WriteString(b.d.QuoteIdentifier(b.conflict.col))
 			sb.WriteString(") DO UPDATE SET ")
-			sb.WriteString(b.d.QuoteIdentifier(b.conflict.updateCol))
-			sb.WriteString(" = ")
-			sb.WriteString(b.d.Placeholder(idx))
-			allArgs = append(allArgs, b.conflict.updateVal)
+			setParts := make([]string, len(b.conflict.sets))
+			for i, s := range b.conflict.sets {
+				idx++
+				setParts[i] = b.d.QuoteIdentifier(s.col) + " = " + b.d.Placeholder(idx)
+				allArgs = append(allArgs, s.val)
+			}
+			sb.WriteString(strings.Join(setParts, ", "))
 		}
 	}
 

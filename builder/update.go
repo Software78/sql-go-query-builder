@@ -1,6 +1,8 @@
 package builder
 
 import (
+	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/Software78/sql-go-query-builder/internal/clause"
@@ -22,6 +24,7 @@ type UpdateBuilder struct {
 	sets      []setItem
 	where     *clause.WhereClause
 	returning []string
+	err       error
 }
 
 func newUpdate(d dialect.Dialect) *UpdateBuilder {
@@ -51,15 +54,25 @@ func (b *UpdateBuilder) SetRaw(col, expr string) *UpdateBuilder {
 }
 
 // SetMap adds multiple col = val assignments from a map.
+// Columns are sorted alphabetically to guarantee deterministic SQL output.
 func (b *UpdateBuilder) SetMap(m map[string]any) *UpdateBuilder {
-	for k, v := range m {
-		b.sets = append(b.sets, setItem{col: k, val: v})
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		b.sets = append(b.sets, setItem{col: k, val: m[k]})
 	}
 	return b
 }
 
 // Where adds a predicate joined with AND.
 func (b *UpdateBuilder) Where(col, op string, val any) *UpdateBuilder {
+	if !clause.ValidOp(op) {
+		b.err = fmt.Errorf("%w: %q", ErrInvalidOp, op)
+		return b
+	}
 	b.where.And(&clause.SimplePredicate{Col: col, Op: op, Val: val})
 	return b
 }
@@ -72,6 +85,10 @@ func (b *UpdateBuilder) WhereRaw(sql string, args ...any) *UpdateBuilder {
 
 // WhereIn adds a col IN (...) predicate.
 func (b *UpdateBuilder) WhereIn(col string, vals ...any) *UpdateBuilder {
+	if len(vals) == 0 {
+		b.err = ErrEmptyIN
+		return b
+	}
 	b.where.And(&clause.InPredicate{Col: col, Vals: vals})
 	return b
 }
@@ -88,6 +105,29 @@ func (b *UpdateBuilder) WhereNotNull(col string) *UpdateBuilder {
 	return b
 }
 
+// OrWhere adds a col OP val predicate joined with OR.
+func (b *UpdateBuilder) OrWhere(col, op string, val any) *UpdateBuilder {
+	if !clause.ValidOp(op) {
+		b.err = fmt.Errorf("%w: %q", ErrInvalidOp, op)
+		return b
+	}
+	b.where.Or(&clause.SimplePredicate{Col: col, Op: op, Val: val})
+	return b
+}
+
+// WhereGroup adds a grouped (parenthesised) set of predicates joined with AND.
+// The callback receives a fresh UpdateBuilder; any Where* calls on it are
+// collected and wrapped in parentheses as a single nested predicate.
+func (b *UpdateBuilder) WhereGroup(fn func(b *UpdateBuilder)) *UpdateBuilder {
+	inner := newUpdate(b.d)
+	fn(inner)
+	if inner.where.IsEmpty() {
+		return b
+	}
+	b.where.And(&clause.GroupedPredicate{Inner: inner.where})
+	return b
+}
+
 // Returning adds a RETURNING clause (PostgreSQL).
 func (b *UpdateBuilder) Returning(cols ...string) *UpdateBuilder {
 	b.returning = append(b.returning, cols...)
@@ -96,6 +136,9 @@ func (b *UpdateBuilder) Returning(cols ...string) *UpdateBuilder {
 
 // ToSQL renders the UPDATE statement.
 func (b *UpdateBuilder) ToSQL() (string, []any, error) {
+	if b.err != nil {
+		return "", nil, b.err
+	}
 	if b.table == "" {
 		return "", nil, ErrNoTable
 	}

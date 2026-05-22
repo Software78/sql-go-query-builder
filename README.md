@@ -58,7 +58,7 @@ q.Select("id").From("users").WhereNotNull("email")
 q.Select("id").From("orders").WhereBetween("amount", 100, 500)
 
 // Raw predicate (caller is responsible for safety)
-q.Select("id").From("users").WhereRaw("LOWER(email) = $1", "test@example.com")
+q.Select("id").From("users").WhereRaw("LOWER(email) = ?", "test@example.com")
 
 // Grouped conditions — produces (role = $1 OR role = $2)
 q.Select("id").From("users").
@@ -130,7 +130,7 @@ q.Insert("users").
 q.Insert("users").
     Columns("email", "name").
     Values("owen@example.com", "Owen").
-    OnConflict("email").DoUpdate("name", "Owen Updated").
+    OnConflict("email").DoUpdate("name", "Owen Updated").Back().
     Returning("id", "updated_at").
     ToSQL()
 

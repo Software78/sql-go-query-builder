@@ -54,7 +54,23 @@ func (w *WhereClause) ToSQL(d dialect.Dialect, idx *int) (string, []any) {
 
 // Clone returns a deep copy of the WhereClause.
 func (w *WhereClause) Clone() *WhereClause {
-	return &WhereClause{root: w.root}
+	return &WhereClause{root: clonePredicate(w.root)}
+}
+
+func clonePredicate(p Predicate) Predicate {
+	if p == nil {
+		return nil
+	}
+	switch v := p.(type) {
+	case *CompoundPredicate:
+		children := make([]Predicate, len(v.Children))
+		for i, c := range v.Children {
+			children[i] = clonePredicate(c)
+		}
+		return &CompoundPredicate{Op: v.Op, Children: children, Grouped: v.Grouped}
+	default:
+		return p
+	}
 }
 
 func merge(existing, incoming Predicate, op LogicalOp) Predicate {
@@ -166,14 +182,27 @@ func (p *BetweenPredicate) toSQL(d dialect.Dialect, idx *int) (string, []any) {
 }
 
 // RawPredicate passes through a literal SQL fragment.
+// Use ? as a positional placeholder token regardless of dialect;
+// they will be rewritten to the correct dialect placeholder at render time.
+// Example: WhereRaw("LOWER(email) = ?", "foo@example.com")
 type RawPredicate struct {
 	SQL  string
 	Args []any
 }
 
-func (p *RawPredicate) toSQL(_ dialect.Dialect, idx *int) (string, []any) {
-	*idx += len(p.Args)
-	return p.SQL, p.Args
+func (p *RawPredicate) toSQL(d dialect.Dialect, idx *int) (string, []any) {
+	var b strings.Builder
+	argIdx := 0
+	for _, ch := range p.SQL {
+		if ch == '?' && argIdx < len(p.Args) {
+			*idx++
+			b.WriteString(d.Placeholder(*idx))
+			argIdx++
+		} else {
+			b.WriteRune(ch)
+		}
+	}
+	return b.String(), p.Args
 }
 
 // quoteCol quotes a simple column name. Dot-separated "table.col" is also handled.

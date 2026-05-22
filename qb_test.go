@@ -141,13 +141,26 @@ func TestSelect_WhereBetween(t *testing.T) {
 func TestSelect_WhereRaw(t *testing.T) {
 	sql, args, err := pg.Select("id").
 		From("users").
-		WhereRaw("LOWER(email) = $1", "test@example.com").
+		WhereRaw("LOWER(email) = ?", "test@example.com").
 		ToSQL()
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertSQL(t, sql, `SELECT "id" FROM "users" WHERE LOWER(email) = $1`)
 	assertArgs(t, args, []any{"test@example.com"})
+}
+
+func TestSelect_WhereRaw_ComposedPlaceholderIndex(t *testing.T) {
+	sql, args, err := pg.Select("id").
+		From("users").
+		Where("active", "=", true).
+		WhereRaw("LOWER(email) = ?", "test@example.com").
+		ToSQL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSQL(t, sql, `SELECT "id" FROM "users" WHERE "active" = $1 AND LOWER(email) = $2`)
+	assertArgs(t, args, []any{true, "test@example.com"})
 }
 
 func TestSelect_WhereGroup(t *testing.T) {
@@ -237,17 +250,7 @@ func TestSelect_CTE(t *testing.T) {
 }
 
 func TestSelect_PlaceholderIndicesComposed(t *testing.T) {
-	// Tests that placeholder indices stay globally correct across composed subqueries.
-	sub := pg.Select("user_id").From("bans").Where("reason", "=", "spam")
-	sql, args, err := pg.Select("id", "email").
-		From("users").
-		Where("active", "=", true).
-		WhereNotIn("id", sub). // NOT IN with scalar vals - here we test with a second Where
-		Where("age", ">", 18).
-		ToSQL()
-	// We use WhereIn with real values to verify indices increment.
-	_ = sub
-	sql, args, err = pg.Select("id").
+	sql, args, err := pg.Select("id").
 		From("users").
 		Where("a", "=", 1).
 		WhereIn("b", 10, 20, 30).
@@ -258,6 +261,19 @@ func TestSelect_PlaceholderIndicesComposed(t *testing.T) {
 	}
 	assertSQL(t, sql, `SELECT "id" FROM "users" WHERE "a" = $1 AND "b" IN ($2, $3, $4) AND "c" = $5`)
 	assertArgs(t, args, []any{1, 10, 20, 30, 2})
+}
+
+func TestSelect_PlaceholderIndices_SubqueryComposed(t *testing.T) {
+	sub := pg.Select("user_id").From("bans").Where("reason", "=", "spam")
+	sql, args, err := pg.Select("id", "email").
+		FromSubquery(sub, "banned").
+		Where("active", "=", true).
+		ToSQL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSQL(t, sql, `SELECT "id", "email" FROM (SELECT "user_id" FROM "bans" WHERE "reason" = $1) "banned" WHERE "active" = $2`)
+	assertArgs(t, args, []any{"spam", true})
 }
 
 func TestSelect_NoTable_Error(t *testing.T) {
@@ -272,6 +288,20 @@ func TestSelect_FromSubquery_NoAlias_Error(t *testing.T) {
 	_, _, err := pg.Select("id").FromSubquery(sub, "").ToSQL()
 	if !errors.Is(err, builder.ErrNoAlias) {
 		t.Errorf("expected ErrNoAlias, got %v", err)
+	}
+}
+
+func TestSelect_FromSubquery_Nil_Error(t *testing.T) {
+	_, _, err := pg.Select("id").FromSubquery(nil, "sub").ToSQL()
+	if !errors.Is(err, builder.ErrNilSubquery) {
+		t.Errorf("expected ErrNilSubquery, got %v", err)
+	}
+}
+
+func TestSelect_WithCTE_Nil_Error(t *testing.T) {
+	_, _, err := pg.Select("id").From("users").WithCTE("x", nil).ToSQL()
+	if !errors.Is(err, builder.ErrNilSubquery) {
+		t.Errorf("expected ErrNilSubquery, got %v", err)
 	}
 }
 
@@ -323,7 +353,7 @@ func TestInsert_OnConflictDoUpdate_Returning(t *testing.T) {
 	sql, args, err := pg.Insert("users").
 		Columns("email", "name").
 		Values("owen@example.com", "Owen").
-		OnConflict("email").DoUpdate("name", "Owen Updated").
+		OnConflict("email").DoUpdate("name", "Owen Updated").Back().
 		Returning("id", "updated_at").
 		ToSQL()
 	if err != nil {
@@ -420,6 +450,34 @@ func TestUpdate_NoColumns_Error(t *testing.T) {
 	}
 }
 
+func TestUpdate_OrWhere(t *testing.T) {
+	sql, args, err := pg.Update("users").
+		Set("flagged", true).
+		Where("role", "=", "bot").
+		OrWhere("role", "=", "spam").
+		ToSQL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSQL(t, sql, `UPDATE "users" SET "flagged" = $1 WHERE "role" = $2 OR "role" = $3`)
+	assertArgs(t, args, []any{true, "bot", "spam"})
+}
+
+func TestUpdate_WhereGroup(t *testing.T) {
+	sql, args, err := pg.Update("users").
+		Set("archived", true).
+		Where("active", "=", false).
+		WhereGroup(func(b *builder.UpdateBuilder) {
+			b.Where("plan", "=", "free").OrWhere("plan", "=", "trial")
+		}).
+		ToSQL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSQL(t, sql, `UPDATE "users" SET "archived" = $1 WHERE "active" = $2 AND ("plan" = $3 OR "plan" = $4)`)
+	assertArgs(t, args, []any{true, false, "free", "trial"})
+}
+
 // ---------------------------------------------------------------------------
 // DELETE
 // ---------------------------------------------------------------------------
@@ -460,6 +518,32 @@ func TestDelete_NoTable_Error(t *testing.T) {
 	if !errors.Is(err, builder.ErrNoTable) {
 		t.Errorf("expected ErrNoTable, got %v", err)
 	}
+}
+
+func TestDelete_OrWhere(t *testing.T) {
+	sql, args, err := pg.Delete("sessions").
+		Where("expired", "=", true).
+		OrWhere("user_id", "=", 0).
+		ToSQL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSQL(t, sql, `DELETE FROM "sessions" WHERE "expired" = $1 OR "user_id" = $2`)
+	assertArgs(t, args, []any{true, 0})
+}
+
+func TestDelete_WhereGroup(t *testing.T) {
+	sql, args, err := pg.Delete("logs").
+		Where("level", "=", "debug").
+		WhereGroup(func(b *builder.DeleteBuilder) {
+			b.Where("service", "=", "worker").OrWhere("service", "=", "cron")
+		}).
+		ToSQL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSQL(t, sql, `DELETE FROM "logs" WHERE "level" = $1 AND ("service" = $2 OR "service" = $3)`)
+	assertArgs(t, args, []any{"debug", "worker", "cron"})
 }
 
 // ---------------------------------------------------------------------------

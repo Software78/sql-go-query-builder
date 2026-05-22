@@ -30,6 +30,7 @@ func (Postgres) Placeholder(n int) string { return fmt.Sprintf("$%d", n) }
 
 // QuoteIdentifier double-quotes the identifier, escaping any internal double quotes.
 func (Postgres) QuoteIdentifier(s string) string {
+	s = sanitizeIdentifier(s)
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
 
@@ -49,6 +50,7 @@ func (MySQL) Placeholder(_ int) string { return "?" }
 
 // QuoteIdentifier backtick-quotes the identifier, escaping internal backticks.
 func (MySQL) QuoteIdentifier(s string) string {
+	s = sanitizeIdentifier(s)
 	return "`" + strings.ReplaceAll(s, "`", "``") + "`"
 }
 

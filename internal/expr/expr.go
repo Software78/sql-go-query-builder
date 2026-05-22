@@ -40,18 +40,28 @@ func (v Val) ToSQL(d dialect.Dialect, idx *int) (string, []any) {
 	return d.Placeholder(*idx), []any{v.V}
 }
 
-// Raw is a literal SQL fragment. The caller is responsible for safety.
+// Raw is a literal SQL fragment. Use ? as a positional placeholder token;
+// it is rewritten to the dialect placeholder at render time.
 // Use only for expressions that cannot be parameterised (e.g. "NOW()", "TRUE").
 type Raw struct {
 	SQL  string
 	Args []any
 }
 
-// ToSQL returns the literal SQL and any pre-bound arguments.
-// Note: Raw args are appended as-is; indices must be managed by the caller.
-func (r Raw) ToSQL(_ dialect.Dialect, idx *int) (string, []any) {
-	*idx += len(r.Args)
-	return r.SQL, r.Args
+// ToSQL returns the literal SQL and bound arguments with placeholders rewritten.
+func (r Raw) ToSQL(d dialect.Dialect, idx *int) (string, []any) {
+	var b strings.Builder
+	argIdx := 0
+	for _, ch := range r.SQL {
+		if ch == '?' && argIdx < len(r.Args) {
+			*idx++
+			b.WriteString(d.Placeholder(*idx))
+			argIdx++
+		} else {
+			b.WriteRune(ch)
+		}
+	}
+	return b.String(), r.Args
 }
 
 // Func represents a SQL function call: NAME(arg1, arg2, ...).
@@ -62,6 +72,9 @@ type Func struct {
 
 // ToSQL renders the function and its arguments.
 func (f Func) ToSQL(d dialect.Dialect, idx *int) (string, []any) {
+	if !isFuncName(f.Name) {
+		return "", nil
+	}
 	parts := make([]string, len(f.Args))
 	var allArgs []any
 	for i, arg := range f.Args {
@@ -70,6 +83,22 @@ func (f Func) ToSQL(d dialect.Dialect, idx *int) (string, []any) {
 		allArgs = append(allArgs, args...)
 	}
 	return fmt.Sprintf("%s(%s)", f.Name, strings.Join(parts, ", ")), allArgs
+}
+
+func isFuncName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i, r := range name {
+		if i == 0 {
+			if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') {
+				return false
+			}
+		} else if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
 }
 
 // Cast represents CAST(expr AS type).

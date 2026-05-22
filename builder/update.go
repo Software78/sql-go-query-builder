@@ -7,13 +7,14 @@ import (
 
 	"github.com/Software78/sql-go-query-builder/internal/clause"
 	"github.com/Software78/sql-go-query-builder/internal/dialect"
+	"github.com/Software78/sql-go-query-builder/internal/expr"
 )
 
 type setItem struct {
 	col    string
 	val    any
-	rawVal string // non-empty means raw expression
-	isRaw  bool
+	expr   expr.Expr
+	isExpr bool
 }
 
 // UpdateBuilder constructs an UPDATE statement.
@@ -46,11 +47,19 @@ func (b *UpdateBuilder) Set(col string, val any) *UpdateBuilder {
 	return b
 }
 
-// SetRaw adds a col = raw_expr assignment (e.g. "quantity = quantity + 1").
-// The expression is inserted verbatim — caller is responsible for safety.
-func (b *UpdateBuilder) SetRaw(col, expr string) *UpdateBuilder {
-	b.sets = append(b.sets, setItem{col: col, rawVal: expr, isRaw: true})
+// SetExpr sets col = expression using a typed expr.Expr (e.g. expr.Raw{SQL: "stock - 1"}).
+// Prefer this over SetRaw for non-parameterised right-hand sides.
+func (b *UpdateBuilder) SetExpr(col string, e expr.Expr) *UpdateBuilder {
+	b.sets = append(b.sets, setItem{col: col, expr: e, isExpr: true})
 	return b
+}
+
+// SetRaw adds a col = raw_expr assignment (e.g. "stock - 1").
+//
+// Deprecated: use SetExpr with expr.Raw instead. The expression is inserted verbatim;
+// caller is responsible for safety — never pass user-controlled strings here.
+func (b *UpdateBuilder) SetRaw(col, rawExpr string) *UpdateBuilder {
+	return b.SetExpr(col, expr.Raw{SQL: rawExpr})
 }
 
 // SetMap adds multiple col = val assignments from a map.
@@ -157,8 +166,10 @@ func (b *UpdateBuilder) ToSQL() (string, []any, error) {
 	setParts := make([]string, len(b.sets))
 	for i, s := range b.sets {
 		col := b.d.QuoteIdentifier(s.col)
-		if s.isRaw {
-			setParts[i] = col + " = " + s.rawVal
+		if s.isExpr {
+			exprSQL, exprArgs := s.expr.ToSQL(b.d, &idx)
+			setParts[i] = col + " = " + exprSQL
+			allArgs = append(allArgs, exprArgs...)
 		} else {
 			idx++
 			setParts[i] = col + " = " + b.d.Placeholder(idx)

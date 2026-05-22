@@ -73,8 +73,9 @@ q.Select("id").From("users").
 ```go
 q.Select("u.id", "o.total").
     From("users").
-    Join("orders", `"orders"."user_id" = "users"."id"`).
-    LeftJoin("profiles", `"profiles"."user_id" = "users"."id"`)
+    Join("orders", "orders.user_id", "users.id").
+    LeftJoin("profiles", "profiles.user_id", "users.id")
+    // JoinRaw(table, condition) for complex ON clauses — caller-sanitised only
 ```
 
 ### Subquery in FROM
@@ -151,7 +152,7 @@ q.Update("users").
 
 // Raw expression
 q.Update("products").
-    SetRaw("stock", "stock - 1").
+    SetExpr("stock", expr.Raw{SQL: "stock - 1"}).
     Where("id", "=", 7).
     ToSQL()
 

@@ -77,7 +77,15 @@ func (s *SelectBuilder) Clone() *SelectBuilder {
 }
 
 // Select sets the columns to retrieve. Pass "*" for all columns.
+// Simple names and table.col qualifiers are quoted; safe aggregates like COUNT(*) AS cnt
+// are allowed. Use expr.Expr via future SelectExpr for other expressions.
 func (s *SelectBuilder) Select(cols ...string) *SelectBuilder {
+	for _, c := range cols {
+		if err := validateSelectColumn(c); err != nil {
+			s.err = err
+			return s
+		}
+	}
 	s.cols = append(s.cols, cols...)
 	return s
 }
@@ -99,21 +107,49 @@ func (s *SelectBuilder) FromSubquery(sub Queryable, alias string) *SelectBuilder
 	return s
 }
 
-// Join adds an INNER JOIN.
-func (s *SelectBuilder) Join(table, condition string) *SelectBuilder {
+// Join adds an INNER JOIN ON leftCol = rightCol with quoted identifiers.
+// Each column may be a simple name (id) or qualified (table.col).
+func (s *SelectBuilder) Join(table, leftCol, rightCol string) *SelectBuilder {
+	return s.addJoin(joinInner, table, leftCol, rightCol)
+}
+
+// LeftJoin adds a LEFT JOIN ON leftCol = rightCol with quoted identifiers.
+func (s *SelectBuilder) LeftJoin(table, leftCol, rightCol string) *SelectBuilder {
+	return s.addJoin(joinLeft, table, leftCol, rightCol)
+}
+
+// RightJoin adds a RIGHT JOIN ON leftCol = rightCol with quoted identifiers.
+func (s *SelectBuilder) RightJoin(table, leftCol, rightCol string) *SelectBuilder {
+	return s.addJoin(joinRight, table, leftCol, rightCol)
+}
+
+// JoinRaw adds an INNER JOIN with a caller-supplied ON condition.
+// The condition is inserted verbatim — caller is responsible for safety.
+func (s *SelectBuilder) JoinRaw(table, condition string) *SelectBuilder {
 	s.joins = append(s.joins, join{joinInner, table, condition})
 	return s
 }
 
-// LeftJoin adds a LEFT JOIN.
-func (s *SelectBuilder) LeftJoin(table, condition string) *SelectBuilder {
+// LeftJoinRaw adds a LEFT JOIN with a caller-supplied ON condition.
+// The condition is inserted verbatim — caller is responsible for safety.
+func (s *SelectBuilder) LeftJoinRaw(table, condition string) *SelectBuilder {
 	s.joins = append(s.joins, join{joinLeft, table, condition})
 	return s
 }
 
-// RightJoin adds a RIGHT JOIN.
-func (s *SelectBuilder) RightJoin(table, condition string) *SelectBuilder {
+// RightJoinRaw adds a RIGHT JOIN with a caller-supplied ON condition.
+// The condition is inserted verbatim — caller is responsible for safety.
+func (s *SelectBuilder) RightJoinRaw(table, condition string) *SelectBuilder {
 	s.joins = append(s.joins, join{joinRight, table, condition})
+	return s
+}
+
+func (s *SelectBuilder) addJoin(typ joinType, table, leftCol, rightCol string) *SelectBuilder {
+	if !isValidJoinColumn(leftCol) || !isValidJoinColumn(rightCol) {
+		s.err = fmt.Errorf("%w: join column", ErrInvalidIdentifier)
+		return s
+	}
+	s.joins = append(s.joins, join{typ, table, joinCondition(s.d, leftCol, rightCol)})
 	return s
 }
 
@@ -288,11 +324,7 @@ func (s *SelectBuilder) ToSQL() (string, []any, error) {
 	} else {
 		quoted := make([]string, len(s.cols))
 		for i, c := range s.cols {
-			if c == "*" || strings.ContainsAny(c, ".()*") {
-				quoted[i] = c
-			} else {
-				quoted[i] = s.d.QuoteIdentifier(c)
-			}
+			quoted[i] = quoteSelectCol(s.d, c)
 		}
 		sb.WriteString(strings.Join(quoted, ", "))
 	}

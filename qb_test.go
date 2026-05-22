@@ -8,6 +8,7 @@ import (
 	"github.com/Software78/sql-go-query-builder"
 	"github.com/Software78/sql-go-query-builder/builder"
 	"github.com/Software78/sql-go-query-builder/internal/dialect"
+	"github.com/Software78/sql-go-query-builder/internal/expr"
 )
 
 // normalise collapses all whitespace sequences to a single space so SQL
@@ -181,14 +182,14 @@ func TestSelect_WhereGroup(t *testing.T) {
 func TestSelect_Joins(t *testing.T) {
 	sql, _, err := pg.Select("u.id", "o.total").
 		From("users").
-		Join("orders", `"orders"."user_id" = "users"."id"`).
-		LeftJoin("profiles", `"profiles"."user_id" = "users"."id"`).
+		Join("orders", "orders.user_id", "users.id").
+		LeftJoin("profiles", "profiles.user_id", "users.id").
 		ToSQL()
 	if err != nil {
 		t.Fatal(err)
 	}
 	// dot-qualified column strings are passed through as-is (contain a dot)
-	assertSQL(t, sql, `SELECT u.id, o.total FROM "users" JOIN "orders" ON "orders"."user_id" = "users"."id" LEFT JOIN "profiles" ON "profiles"."user_id" = "users"."id"`)
+	assertSQL(t, sql, `SELECT "u"."id", "o"."total" FROM "users" JOIN "orders" ON "orders"."user_id" = "users"."id" LEFT JOIN "profiles" ON "profiles"."user_id" = "users"."id"`)
 }
 
 func TestSelect_GroupByHaving(t *testing.T) {
@@ -579,6 +580,41 @@ func TestMySQL_QuoteIdentifier(t *testing.T) {
 // ---------------------------------------------------------------------------
 // Clone immutability
 // ---------------------------------------------------------------------------
+
+func TestSelect_MaliciousColumn_Rejected(t *testing.T) {
+	_, _, err := pg.Select(`1; DROP TABLE users --`).From("users").ToSQL()
+	if !errors.Is(err, builder.ErrInvalidIdentifier) {
+		t.Errorf("expected ErrInvalidIdentifier, got %v", err)
+	}
+}
+
+func TestSelect_MaliciousSubqueryInColumn_Rejected(t *testing.T) {
+	_, _, err := pg.Select("(SELECT secret FROM tokens LIMIT 1)").From("users").ToSQL()
+	if !errors.Is(err, builder.ErrInvalidIdentifier) {
+		t.Errorf("expected ErrInvalidIdentifier, got %v", err)
+	}
+}
+
+func TestSelect_Join_InvalidColumn_Error(t *testing.T) {
+	_, _, err := pg.Select("id").From("users").
+		Join("orders", "orders.user_id; DROP", "users.id").
+		ToSQL()
+	if !errors.Is(err, builder.ErrInvalidIdentifier) {
+		t.Errorf("expected ErrInvalidIdentifier, got %v", err)
+	}
+}
+
+func TestUpdate_SetExpr(t *testing.T) {
+	sql, args, err := pg.Update("products").
+		SetExpr("stock", expr.Raw{SQL: "stock - 1"}).
+		Where("id", "=", 7).
+		ToSQL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSQL(t, sql, `UPDATE "products" SET "stock" = stock - 1 WHERE "id" = $1`)
+	assertArgs(t, args, []any{7})
+}
 
 func TestSelect_Clone_Immutable(t *testing.T) {
 	base := pg.Select("id").From("users").Where("active", "=", true)

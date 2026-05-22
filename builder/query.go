@@ -18,8 +18,9 @@ var (
 	ErrMismatch       = errors.New("qb: column and value count mismatch")
 	ErrInvalidOp      = errors.New("qb: invalid SQL operator")
 	ErrEmptyIN        = errors.New("qb: IN list must not be empty")
-	ErrNilSubquery    = errors.New("qb: subquery Queryable must not be nil")
-	ErrNoAlias        = errors.New("qb: subquery FROM requires an alias")
+	ErrNilSubquery       = errors.New("qb: subquery Queryable must not be nil")
+	ErrNoAlias           = errors.New("qb: subquery FROM requires an alias")
+	ErrInvalidIdentifier = errors.New("qb: invalid SQL identifier")
 )
 
 // Direction is the ORDER BY sort direction.

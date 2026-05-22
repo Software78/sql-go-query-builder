@@ -76,6 +76,18 @@ func (b *UpdateBuilder) WhereIn(col string, vals ...any) *UpdateBuilder {
 	return b
 }
 
+// WhereNull adds a col IS NULL predicate.
+func (b *UpdateBuilder) WhereNull(col string) *UpdateBuilder {
+	b.where.And(&clause.NullPredicate{Col: col, Not: false})
+	return b
+}
+
+// WhereNotNull adds a col IS NOT NULL predicate.
+func (b *UpdateBuilder) WhereNotNull(col string) *UpdateBuilder {
+	b.where.And(&clause.NullPredicate{Col: col, Not: true})
+	return b
+}
+
 // Returning adds a RETURNING clause (PostgreSQL).
 func (b *UpdateBuilder) Returning(cols ...string) *UpdateBuilder {
 	b.returning = append(b.returning, cols...)

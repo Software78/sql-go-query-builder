@@ -3,8 +3,8 @@ package builder
 import (
 	"strings"
 
-	"github.com/Software78/sql-query-builder/internal/clause"
-	"github.com/Software78/sql-query-builder/internal/dialect"
+	"github.com/Software78/sql-go-query-builder/internal/clause"
+	"github.com/Software78/sql-go-query-builder/internal/dialect"
 )
 
 // DeleteBuilder constructs a DELETE statement.

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Software78/sql-query-builder/internal/dialect"
+	"github.com/Software78/sql-go-query-builder/internal/dialect"
 )
 
 // Expr is a self-contained SQL expression that can render itself with the given

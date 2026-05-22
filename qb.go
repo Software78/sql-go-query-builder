@@ -17,8 +17,8 @@
 package qb
 
 import (
-	"github.com/Software78/sql-query-builder/builder"
-	"github.com/Software78/sql-query-builder/internal/dialect"
+	"github.com/Software78/sql-go-query-builder/builder"
+	"github.com/Software78/sql-go-query-builder/internal/dialect"
 )
 
 // QB is the root factory that creates query builders scoped to a dialect.

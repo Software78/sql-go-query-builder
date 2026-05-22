@@ -59,6 +59,7 @@ q.Select("id").From("orders").WhereBetween("amount", 100, 500)
 
 // Raw predicate (caller is responsible for safety)
 q.Select("id").From("users").WhereRaw("LOWER(email) = ?", "test@example.com")
+// Use ?? for a literal ? (e.g. PostgreSQL JSONB): WhereRaw("metadata ?? ?", key)
 
 // Grouped conditions — produces (role = $1 OR role = $2)
 q.Select("id").From("users").

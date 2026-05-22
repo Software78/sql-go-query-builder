@@ -184,7 +184,9 @@ func (p *BetweenPredicate) toSQL(d dialect.Dialect, idx *int) (string, []any) {
 // RawPredicate passes through a literal SQL fragment.
 // Use ? as a positional placeholder token regardless of dialect;
 // they will be rewritten to the correct dialect placeholder at render time.
+// Use ?? for a literal ? (e.g. PostgreSQL JSONB ? operator).
 // Example: WhereRaw("LOWER(email) = ?", "foo@example.com")
+// Example: WhereRaw("metadata ?? ?", key)  // metadata ? $1
 type RawPredicate struct {
 	SQL  string
 	Args []any
@@ -192,15 +194,23 @@ type RawPredicate struct {
 
 func (p *RawPredicate) toSQL(d dialect.Dialect, idx *int) (string, []any) {
 	var b strings.Builder
+	runes := []rune(p.SQL)
 	argIdx := 0
-	for _, ch := range p.SQL {
-		if ch == '?' && argIdx < len(p.Args) {
-			*idx++
-			b.WriteString(d.Placeholder(*idx))
-			argIdx++
-		} else {
-			b.WriteRune(ch)
+	for i := 0; i < len(runes); i++ {
+		if runes[i] == '?' {
+			if i+1 < len(runes) && runes[i+1] == '?' {
+				b.WriteRune('?')
+				i++
+				continue
+			}
+			if argIdx < len(p.Args) {
+				*idx++
+				b.WriteString(d.Placeholder(*idx))
+				argIdx++
+				continue
+			}
 		}
+		b.WriteRune(runes[i])
 	}
 	return b.String(), p.Args
 }

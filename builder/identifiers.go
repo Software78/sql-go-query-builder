@@ -2,10 +2,15 @@ package builder
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode"
 
 	"github.com/Software78/sql-go-query-builder/internal/dialect"
+)
+
+var forbiddenSQLWords = regexp.MustCompile(
+	`(?i)\b(select|from|union|insert|delete|update|drop|exec|execute|sleep|benchmark|pg_sleep|waitfor|delay)\b`,
 )
 
 // quoteQualifiedCol quotes each dot-separated segment as an identifier.
@@ -111,14 +116,13 @@ func isValidJoinColumn(c string) bool {
 // injection patterns; prefer expr.Expr for complex projections.
 func isSafeSelectExpression(c string) bool {
 	lower := strings.ToLower(c)
-	for _, forbidden := range []string{
-		";", "--", "/*", "*/", "select", "from", "union", "insert", "delete",
-		"update", "drop", "exec", "execute", "xp_", "0x",
-		"sleep", "benchmark", "pg_sleep", "waitfor", "delay",
-	} {
+	for _, forbidden := range []string{";", "--", "/*", "*/", "xp_", "0x"} {
 		if strings.Contains(lower, forbidden) {
 			return false
 		}
+	}
+	if forbiddenSQLWords.MatchString(c) {
+		return false
 	}
 	if !strings.Contains(c, "(") {
 		return false

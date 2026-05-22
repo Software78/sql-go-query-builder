@@ -49,6 +49,7 @@ func (b *DeleteBuilder) Where(col, op string, val any) *DeleteBuilder {
 }
 
 // WhereRaw adds a raw predicate joined with AND.
+// Use ? for bound parameters and ?? for a literal ? (e.g. PostgreSQL JSONB ?).
 func (b *DeleteBuilder) WhereRaw(sql string, args ...any) *DeleteBuilder {
 	b.where.And(&clause.RawPredicate{SQL: sql, Args: args})
 	return b

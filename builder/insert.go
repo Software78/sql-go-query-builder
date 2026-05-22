@@ -52,6 +52,7 @@ type InsertBuilder struct {
 	fromSel   *SelectBuilder
 	conflict  *ConflictClause
 	returning []string
+	err       error
 }
 
 func newInsert(d dialect.Dialect) *InsertBuilder {
@@ -102,6 +103,9 @@ func (b *InsertBuilder) Returning(cols ...string) *InsertBuilder {
 
 // ToSQL renders the INSERT statement.
 func (b *InsertBuilder) ToSQL() (string, []any, error) {
+	if b.err != nil {
+		return "", nil, b.err
+	}
 	if b.table == "" {
 		return "", nil, ErrNoTable
 	}

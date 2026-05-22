@@ -87,6 +87,7 @@ func (b *UpdateBuilder) Where(col, op string, val any) *UpdateBuilder {
 }
 
 // WhereRaw adds a raw predicate joined with AND.
+// Use ? for bound parameters and ?? for a literal ? (e.g. PostgreSQL JSONB ?).
 func (b *UpdateBuilder) WhereRaw(sql string, args ...any) *UpdateBuilder {
 	b.where.And(&clause.RawPredicate{SQL: sql, Args: args})
 	return b

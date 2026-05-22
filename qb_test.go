@@ -151,6 +151,53 @@ func TestSelect_WhereRaw(t *testing.T) {
 	assertArgs(t, args, []any{"test@example.com"})
 }
 
+func TestSelect_WhereRaw_JSONBOperator(t *testing.T) {
+	sql, args, err := pg.Select("id").
+		From("docs").
+		WhereRaw("metadata ?? ?", "published").
+		ToSQL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSQL(t, sql, `SELECT "id" FROM "docs" WHERE metadata ? $1`)
+	assertArgs(t, args, []any{"published"})
+}
+
+func TestSelect_WhereRaw_EscapedQuestionMark(t *testing.T) {
+	sql, _, err := pg.Select("id").
+		From("docs").
+		WhereRaw("metadata ?? 'published'").
+		ToSQL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSQL(t, sql, `SELECT "id" FROM "docs" WHERE metadata ? 'published'`)
+}
+
+func TestSelect_WhereNotIn_Empty_Error(t *testing.T) {
+	_, _, err := pg.Select("id").From("orders").WhereNotIn("state").ToSQL()
+	if !errors.Is(err, builder.ErrEmptyIN) {
+		t.Errorf("expected ErrEmptyIN, got %v", err)
+	}
+}
+
+func TestSelect_OrderBy_InvalidDirection_Error(t *testing.T) {
+	_, _, err := pg.Select("id").From("users").
+		OrderBy("id", builder.Direction("NULLS FIRST")).
+		ToSQL()
+	if err == nil {
+		t.Fatal("expected error for invalid ORDER BY direction")
+	}
+}
+
+func TestSelect_SafeExpression_AliasWordBoundary(t *testing.T) {
+	sql, _, err := pg.Select("COUNT(*) AS selected_count").From("users").ToSQL()
+	if err != nil {
+		t.Fatalf("expected valid expression alias, got %v", err)
+	}
+	assertSQL(t, sql, `SELECT COUNT(*) AS selected_count FROM "users"`)
+}
+
 func TestSelect_WhereRaw_ComposedPlaceholderIndex(t *testing.T) {
 	sql, args, err := pg.Select("id").
 		From("users").

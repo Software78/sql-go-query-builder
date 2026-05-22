@@ -170,6 +170,7 @@ func (s *SelectBuilder) Where(col, op string, val any) *SelectBuilder {
 }
 
 // WhereRaw adds a raw SQL predicate joined with AND.
+// Use ? for bound parameters and ?? for a literal ? (e.g. PostgreSQL JSONB ?).
 // Use ? as a positional placeholder token; it is rewritten to the dialect placeholder at render time.
 func (s *SelectBuilder) WhereRaw(sql string, args ...any) *SelectBuilder {
 	s.where.And(&clause.RawPredicate{SQL: sql, Args: args})
@@ -188,6 +189,10 @@ func (s *SelectBuilder) WhereIn(col string, vals ...any) *SelectBuilder {
 
 // WhereNotIn adds a col NOT IN (...) predicate.
 func (s *SelectBuilder) WhereNotIn(col string, vals ...any) *SelectBuilder {
+	if len(vals) == 0 {
+		s.err = ErrEmptyIN
+		return s
+	}
 	s.where.And(&clause.InPredicate{Col: col, Vals: vals, Not: true})
 	return s
 }
@@ -261,6 +266,10 @@ func (s *SelectBuilder) Having(col, op string, val any) *SelectBuilder {
 
 // OrderBy adds an ORDER BY column with direction.
 func (s *SelectBuilder) OrderBy(col string, dir Direction) *SelectBuilder {
+	if dir != ASC && dir != DESC {
+		s.err = fmt.Errorf("qb: invalid ORDER BY direction: %q", dir)
+		return s
+	}
 	if err := validateIdentifierColumn(col); err != nil {
 		s.err = err
 		return s

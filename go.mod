@@ -1,3 +1,3 @@
-module github.com/Software78/sql-query-builder
+module github.com/Software78/sql-go-query-builder
 
 go 1.22.2

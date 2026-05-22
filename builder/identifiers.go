@@ -22,6 +22,22 @@ func joinCondition(d dialect.Dialect, leftCol, rightCol string) string {
 	return quoteQualifiedCol(d, leftCol) + " = " + quoteQualifiedCol(d, rightCol)
 }
 
+// validateIdentifierColumn reports whether a name is a simple or qualified identifier.
+func validateIdentifierColumn(col string) error {
+	if isSimpleIdentifier(col) || isQualifiedColumn(col) {
+		return nil
+	}
+	return fmt.Errorf("%w: %q", ErrInvalidIdentifier, col)
+}
+
+// quoteIdentifierColumn quotes a simple or qualified column reference.
+func quoteIdentifierColumn(d dialect.Dialect, col string) string {
+	if isQualifiedColumn(col) {
+		return quoteQualifiedCol(d, col)
+	}
+	return d.QuoteIdentifier(col)
+}
+
 // validateSelectColumn reports whether a Select() argument is permitted.
 func validateSelectColumn(c string) error {
 	if c == "*" || isQualifiedColumn(c) || isSafeSelectExpression(c) || isSimpleIdentifier(c) {
@@ -98,6 +114,7 @@ func isSafeSelectExpression(c string) bool {
 	for _, forbidden := range []string{
 		";", "--", "/*", "*/", "select", "from", "union", "insert", "delete",
 		"update", "drop", "exec", "execute", "xp_", "0x",
+		"sleep", "benchmark", "pg_sleep", "waitfor", "delay",
 	} {
 		if strings.Contains(lower, forbidden) {
 			return false

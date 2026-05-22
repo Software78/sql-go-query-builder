@@ -107,8 +107,20 @@ type Cast struct {
 	CastType string
 }
 
-// ToSQL renders CAST(... AS type).
+var validCastTypes = map[string]bool{
+	"INT": true, "INTEGER": true, "BIGINT": true, "SMALLINT": true,
+	"TEXT": true, "VARCHAR": true, "BOOLEAN": true, "BOOL": true,
+	"FLOAT": true, "NUMERIC": true, "DECIMAL": true,
+	"DATE": true, "TIMESTAMP": true, "TIMESTAMPTZ": true, "UUID": true,
+	"JSONB": true, "JSON": true,
+}
+
+// ToSQL renders CAST(... AS type). CastType must be in the allowlist.
 func (c Cast) ToSQL(d dialect.Dialect, idx *int) (string, []any) {
+	upper := strings.ToUpper(c.CastType)
+	if !validCastTypes[upper] {
+		return "", nil
+	}
 	sql, args := c.Inner.ToSQL(d, idx)
-	return fmt.Sprintf("CAST(%s AS %s)", sql, c.CastType), args
+	return fmt.Sprintf("CAST(%s AS %s)", sql, upper), args
 }

@@ -20,6 +20,25 @@ func TestRaw_PlaceholderRewrite(t *testing.T) {
 	}
 }
 
+func TestCast_InvalidType(t *testing.T) {
+	idx := 0
+	sql, args := Cast{Inner: Val{V: 1}, CastType: "TEXT; DROP"}.ToSQL(dialect.Postgres{}, &idx)
+	if sql != "" || args != nil {
+		t.Errorf("expected empty result for invalid cast type, got %q %v", sql, args)
+	}
+}
+
+func TestCast_ValidType(t *testing.T) {
+	idx := 0
+	sql, args := Cast{Inner: Val{V: 1}, CastType: "text"}.ToSQL(dialect.Postgres{}, &idx)
+	if sql != "CAST($1 AS TEXT)" {
+		t.Errorf("got %q", sql)
+	}
+	if len(args) != 1 || args[0] != 1 {
+		t.Errorf("args: %v", args)
+	}
+}
+
 func TestFunc_InvalidName(t *testing.T) {
 	idx := 0
 	sql, args := Func{Name: "COUNT; DROP", Args: nil}.ToSQL(dialect.Postgres{}, &idx)

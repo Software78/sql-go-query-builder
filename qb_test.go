@@ -581,6 +581,50 @@ func TestMySQL_QuoteIdentifier(t *testing.T) {
 // Clone immutability
 // ---------------------------------------------------------------------------
 
+func TestSelect_WhereGroup_PropagatesInnerError(t *testing.T) {
+	_, _, err := pg.Select("id").From("users").
+		WhereGroup(func(b *builder.SelectBuilder) {
+			b.Where("col", "INJECT", 1)
+		}).
+		ToSQL()
+	if !errors.Is(err, builder.ErrInvalidOp) {
+		t.Errorf("expected ErrInvalidOp from inner WhereGroup, got %v", err)
+	}
+}
+
+func TestSelect_OrderBy_InvalidColumn_Error(t *testing.T) {
+	_, _, err := pg.Select("id").From("users").OrderBy(`col"; SELECT`, builder.ASC).ToSQL()
+	if !errors.Is(err, builder.ErrInvalidIdentifier) {
+		t.Errorf("expected ErrInvalidIdentifier, got %v", err)
+	}
+}
+
+func TestSelect_GroupBy_InvalidColumn_Error(t *testing.T) {
+	_, _, err := pg.Select("id").From("users").GroupBy(`bad; DROP`).ToSQL()
+	if !errors.Is(err, builder.ErrInvalidIdentifier) {
+		t.Errorf("expected ErrInvalidIdentifier, got %v", err)
+	}
+}
+
+func TestSelect_SafeExpression_Sleep_Rejected(t *testing.T) {
+	_, _, err := pg.Select("SLEEP(5)").From("users").ToSQL()
+	if !errors.Is(err, builder.ErrInvalidIdentifier) {
+		t.Errorf("expected ErrInvalidIdentifier for SLEEP expression, got %v", err)
+	}
+}
+
+func TestUpdate_WhereGroup_PropagatesInnerError(t *testing.T) {
+	_, _, err := pg.Update("users").
+		Set("x", 1).
+		WhereGroup(func(b *builder.UpdateBuilder) {
+			b.Where("col", "BAD", 1)
+		}).
+		ToSQL()
+	if !errors.Is(err, builder.ErrInvalidOp) {
+		t.Errorf("expected ErrInvalidOp, got %v", err)
+	}
+}
+
 func TestSelect_MaliciousColumn_Rejected(t *testing.T) {
 	_, _, err := pg.Select(`1; DROP TABLE users --`).From("users").ToSQL()
 	if !errors.Is(err, builder.ErrInvalidIdentifier) {

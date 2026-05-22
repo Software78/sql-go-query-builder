@@ -80,6 +80,10 @@ func (b *DeleteBuilder) OrWhere(col, op string, val any) *DeleteBuilder {
 func (b *DeleteBuilder) WhereGroup(fn func(b *DeleteBuilder)) *DeleteBuilder {
 	inner := newDelete(b.d)
 	fn(inner)
+	if inner.err != nil {
+		b.err = inner.err
+		return b
+	}
 	if inner.where.IsEmpty() {
 		return b
 	}

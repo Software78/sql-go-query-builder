@@ -226,6 +226,10 @@ func (s *SelectBuilder) OrWhere(col, op string, val any) *SelectBuilder {
 func (s *SelectBuilder) WhereGroup(fn func(b *SelectBuilder)) *SelectBuilder {
 	inner := newSelect(s.d)
 	fn(inner)
+	if inner.err != nil {
+		s.err = inner.err
+		return s
+	}
 	if inner.where.IsEmpty() {
 		return s
 	}
@@ -235,6 +239,12 @@ func (s *SelectBuilder) WhereGroup(fn func(b *SelectBuilder)) *SelectBuilder {
 
 // GroupBy adds GROUP BY columns.
 func (s *SelectBuilder) GroupBy(cols ...string) *SelectBuilder {
+	for _, col := range cols {
+		if err := validateIdentifierColumn(col); err != nil {
+			s.err = err
+			return s
+		}
+	}
 	s.groupBy = append(s.groupBy, cols...)
 	return s
 }
@@ -251,6 +261,10 @@ func (s *SelectBuilder) Having(col, op string, val any) *SelectBuilder {
 
 // OrderBy adds an ORDER BY column with direction.
 func (s *SelectBuilder) OrderBy(col string, dir Direction) *SelectBuilder {
+	if err := validateIdentifierColumn(col); err != nil {
+		s.err = err
+		return s
+	}
 	s.orderBy = append(s.orderBy, orderItem{col, dir})
 	return s
 }
@@ -373,7 +387,7 @@ func (s *SelectBuilder) ToSQL() (string, []any, error) {
 	if len(s.groupBy) > 0 {
 		quoted := make([]string, len(s.groupBy))
 		for i, c := range s.groupBy {
-			quoted[i] = s.d.QuoteIdentifier(c)
+			quoted[i] = quoteIdentifierColumn(s.d, c)
 		}
 		sb.WriteString("\nGROUP BY ")
 		sb.WriteString(strings.Join(quoted, ", "))
@@ -393,7 +407,7 @@ func (s *SelectBuilder) ToSQL() (string, []any, error) {
 		sb.WriteString("\nORDER BY ")
 		parts := make([]string, len(s.orderBy))
 		for i, o := range s.orderBy {
-			parts[i] = s.d.QuoteIdentifier(o.col) + " " + string(o.dir)
+			parts[i] = quoteIdentifierColumn(s.d, o.col) + " " + string(o.dir)
 		}
 		sb.WriteString(strings.Join(parts, ", "))
 	}

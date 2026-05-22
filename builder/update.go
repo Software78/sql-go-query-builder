@@ -130,6 +130,10 @@ func (b *UpdateBuilder) OrWhere(col, op string, val any) *UpdateBuilder {
 func (b *UpdateBuilder) WhereGroup(fn func(b *UpdateBuilder)) *UpdateBuilder {
 	inner := newUpdate(b.d)
 	fn(inner)
+	if inner.err != nil {
+		b.err = inner.err
+		return b
+	}
 	if inner.where.IsEmpty() {
 		return b
 	}

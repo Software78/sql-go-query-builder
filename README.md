@@ -19,7 +19,7 @@ No ORM. No reflection. No external dependencies. Just composable, safe SQL.
 ## Quick start
 
 ```go
-q := qb.New(dialect.Postgres{})
+q := qb.NewPostgres()
 ```
 
 ## SELECT
@@ -144,6 +144,8 @@ q.Insert("users").Columns("name", "email").FromSelect(sel).ToSQL()
 ## UPDATE
 
 ```go
+import "github.com/Software78/sql-go-query-builder/expr"
+
 q.Update("users").
     Set("name", "Owen").
     Set("status", "active").

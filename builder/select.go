@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/Software78/sql-go-query-builder/internal/clause"
-	"github.com/Software78/sql-go-query-builder/internal/dialect"
+	"github.com/Software78/sql-go-query-builder/dialect"
 )
 // joinType classifies a JOIN variant.
 type joinType string

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Software78/sql-go-query-builder/internal/dialect"
+	"github.com/Software78/sql-go-query-builder/dialect"
 )
 
 // LogicalOp is AND or OR.

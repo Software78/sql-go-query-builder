@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Software78/sql-go-query-builder/internal/dialect"
+	"github.com/Software78/sql-go-query-builder/dialect"
 )
 
 // ConflictAction specifies what to do on a unique constraint violation.

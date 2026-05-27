@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/Software78/sql-go-query-builder/internal/clause"
-	"github.com/Software78/sql-go-query-builder/internal/dialect"
-	"github.com/Software78/sql-go-query-builder/internal/expr"
+	"github.com/Software78/sql-go-query-builder/dialect"
+	"github.com/Software78/sql-go-query-builder/expr"
 )
 
 type setItem struct {

@@ -46,3 +46,4 @@ func TestFunc_InvalidName(t *testing.T) {
 		t.Errorf("expected empty result for invalid func name, got %q %v", sql, args)
 	}
 }
+

@@ -7,8 +7,8 @@ import (
 
 	"github.com/Software78/sql-go-query-builder"
 	"github.com/Software78/sql-go-query-builder/builder"
-	"github.com/Software78/sql-go-query-builder/internal/dialect"
-	"github.com/Software78/sql-go-query-builder/internal/expr"
+	"github.com/Software78/sql-go-query-builder/dialect"
+	"github.com/Software78/sql-go-query-builder/expr"
 )
 
 // normalise collapses all whitespace sequences to a single space so SQL
